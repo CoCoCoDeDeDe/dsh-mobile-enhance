@@ -142,8 +142,6 @@ function send(res, status, type, body, extra = {}) {
  * @param {import('@deepseek-ai/cordis').Context} ctx
  */
 export function apply(ctx) {
-  const disposers = []
-
   ctx.effect(() => {
     const cleanup = []
 
@@ -222,6 +220,4 @@ export function apply(ctx) {
     table.push({ kind: 'style', text: MOBILE_CSS })
     table.push({ kind: 'script', placement: 'head', text: BOOT_SCRIPT })
   })
-
-  return disposers
 }
