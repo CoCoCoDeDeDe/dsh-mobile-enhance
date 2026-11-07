@@ -17,6 +17,8 @@
  * dsh-pocket (the proxy rewrites Host/Origin but forwards these paths unchanged).
  */
 
+import { readFileSync } from 'node:fs'
+
 /** Services this plugin needs before it may activate. */
 export const inject = ['webServer']
 
@@ -48,6 +50,18 @@ const MANIFEST = {
       type: 'image/svg+xml',
       purpose: 'any',
     },
+    {
+      src: `${PREFIX}/icon-192.png`,
+      sizes: '192x192',
+      type: 'image/png',
+      purpose: 'any',
+    },
+    {
+      src: `${PREFIX}/icon-512.png`,
+      sizes: '512x512',
+      type: 'image/png',
+      purpose: 'any',
+    },
   ],
 }
 
@@ -76,7 +90,31 @@ self.addEventListener('fetch', function () {
 })
 `
 
-const MOBILE_CSS = `:root { --dme-kb: 0px; }`
+const MOBILE_CSS = `:root { --dme-kb: 0px; }
+
+/* Touch devices have no hover, so hover-revealed session actions would never
+   appear. Keep them visible wherever the harness used opacity to hide them. */
+@media (hover: none) and (pointer: coarse) {
+  [class*="_actions"] { opacity: 1 !important; }
+}
+`
+
+/**
+ * PNG icons are committed build artifacts (`npm run build:icons`). A missing
+ * file skips its route instead of failing plugin activation.
+ */
+function readIconPng(size) {
+  try {
+    return readFileSync(new URL(`./assets/icon-${size}.png`, import.meta.url))
+  } catch {
+    return null
+  }
+}
+
+const ICON_PNG = {
+  192: readIconPng(192),
+  512: readIconPng(512),
+}
 
 /**
  * Runs in the page before the app boots. Kept dependency-free and wrapped in
@@ -103,19 +141,71 @@ const BOOT_SCRIPT = `!function () {
       applyKeyboardInset()
     }
 
-    if (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) {
-      var proto = HTMLInputElement.prototype
-      var originalClick = proto.click
-      proto.click = function () {
-        try {
-          if (this.type === 'file' && !this.accept) {
-            this.accept = 'image/*'
-            this.multiple = true
-          }
-        } catch (e) {}
-        return originalClick.call(this)
-      }
+    if (!window.matchMedia || !window.matchMedia('(pointer: coarse)').matches) return
+
+    /* The harness composer keeps one persistent, accept-less <input type=file>.
+     * The default "+" menu keeps the document picker; our gallery button sets
+     * __dmePickMode so the very next click applies accept=image/* instead. */
+    var proto = HTMLInputElement.prototype
+    var originalClick = proto.click
+    proto.click = function () {
+      try {
+        if (this.type === 'file') {
+          var mode = window.__dmePickMode
+          window.__dmePickMode = ''
+          this.accept = mode === 'image' ? 'image/*' : ''
+          if (mode === 'image') this.multiple = true
+        }
+      } catch (e) {}
+      return originalClick.call(this)
     }
+
+    /* A gallery button beside the composer "+" button. The toolbar already
+     * holds the hidden file input, so it gives us both the anchor and the
+     * target for the pick. */
+    var GALLERY_ATTR = 'data-dme-gallery'
+    var mountGallery = function (input) {
+      var parent = input && input.parentElement
+      if (!parent || parent.querySelector('[' + GALLERY_ATTR + ']')) return
+      var button = document.createElement('button')
+      button.type = 'button'
+      button.setAttribute(GALLERY_ATTR, '')
+      button.setAttribute('aria-label', '从相册选择')
+      button.title = '从相册选择'
+      button.style.cssText =
+        'width:28px;height:28px;border:none;border-radius:999px;background:var(--dsw-specific-selector,#f3f4f6);color:var(--dsw-alias-label-primary,#111);display:grid;place-items:center;cursor:pointer;flex:none;padding:0'
+      button.innerHTML =
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>'
+      button.addEventListener('click', function (event) {
+        event.preventDefault()
+        event.stopPropagation()
+        var current = parent.querySelector('input[type=file]')
+        if (!current) return
+        window.__dmePickMode = 'image'
+        current.click()
+      })
+      parent.insertBefore(button, input)
+    }
+
+    var scanTimer = 0
+    var scan = function () {
+      scanTimer = 0
+      var inputs = document.querySelectorAll('input[type=file]')
+      for (var i = 0; i < inputs.length; i++) mountGallery(inputs[i])
+    }
+    var scheduleScan = function () {
+      if (scanTimer) return
+      scanTimer = setTimeout(scan, 50)
+    }
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', scheduleScan, { once: true })
+    } else {
+      scheduleScan()
+    }
+    new MutationObserver(scheduleScan).observe(document.documentElement, {
+      childList: true,
+      subtree: true,
+    })
   } catch (e) {}
 }()
 `
@@ -190,6 +280,28 @@ export function apply(ctx) {
         },
       }),
     )
+
+    for (const [size, bytes] of Object.entries(ICON_PNG)) {
+      if (!bytes) continue
+      cleanup.push(
+        ctx.webServer.register({
+          kind: 'exact',
+          path: `${PREFIX}/icon-${size}.png`,
+          handler: (req, res) => {
+            if (req.method !== 'GET') {
+              send(res, 405, 'text/plain; charset=utf-8', 'method not allowed')
+              return
+            }
+            res.writeHead(200, {
+              'content-type': 'image/png',
+              'cache-control': 'public, max-age=86400',
+              'x-content-type-options': 'nosniff',
+            })
+            res.end(bytes)
+          },
+        }),
+      )
+    }
 
     cleanup.push(
       ctx.webServer.tapIndex((html) => {

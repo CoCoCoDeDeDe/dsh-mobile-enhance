@@ -11,9 +11,10 @@ and the served index keep their paths.
 
 | Feature | How |
 |---|---|
-| **Installable PWA** | Serves `/dme/manifest.webmanifest`, `/dme/icon.svg` and a pass-through service worker at `/dme-sw.js`, then rewrites the index `<link rel="manifest">`. Chrome offers *Install app* instead of a plain shortcut, and `display: fullscreen` removes the browser chrome. |
+| **Installable PWA** | Serves `/dme/manifest.webmanifest`, SVG + 192/512 PNG icons and a pass-through service worker at `/dme-sw.js`, then rewrites the index `<link rel="manifest">`. Chrome offers *Install app* instead of a plain shortcut, and `display: fullscreen` removes the browser chrome. |
 | **Keyboard-safe viewport** | Rewrites the viewport meta with `interactive-widget=resizes-content`, and exposes the on-screen keyboard height as the CSS variable `--dme-kb` (plus `html.dme-kb-open`) on coarse-pointer devices. |
-| **Gallery multi-select** | On coarse-pointer devices, patches `HTMLInputElement.prototype.click` so a bare file input gets `accept="image/*"` and `multiple`, opening the system photo picker instead of the document manager. |
+| **Gallery button** | On coarse-pointer devices, injects a gallery button beside the composer "+" button. One tap opens the system photo picker with `accept="image/*"` and multi-select; the normal "+ → File" path keeps the document picker, so files still work. |
+| **Touch hover actions** | Keeps opacity-hidden session actions visible under `@media (hover: none)`. |
 
 ## Install
 
@@ -29,8 +30,21 @@ From GitHub:
 dsh plugin --profile web add github:CoCoCoDeDeDe/dsh-mobile-enhance -w
 ```
 
-Then restart `dsh web`. The plugin is a Host-only bundle; no client bundle is
-loaded.
+Then restart `dsh web` (or touch the profile patch to trigger HMR). The plugin
+is a Host-only bundle; no client bundle is loaded.
+
+## Updating a page you already opened
+
+The injected index is served with `Cache-Control: no-store`, but a phone tab may
+still hold the previous document. To force a fresh load on Android Chrome:
+
+1. Pull down to refresh, or tap **⋮ → Reload**; or
+2. **⋮ → Settings → Privacy and security → Clear browsing data → Cached images
+   and files** (keep cookies so you stay signed in); or
+3. Open the same URL in a new tab and close the old one.
+
+After a service worker is registered, a normal reload is enough because the
+worker is pass-through and never caches the shell.
 
 ## Verified against
 
@@ -39,19 +53,22 @@ loaded.
 
 ## Known limits
 
-- **SVG icon only (MVP).** Chrome's installability check may still require
-  192×192 and 512×512 **PNG** icons; if *Install app* does not appear, add PNGs
-  under `assets/` and extend the `icons` list in `index.js`.
-- **Gallery patch is broad.** Any bare file input on a touch device becomes an
-  image picker with multi-select. If you need to send non-image files from the
-  phone, that entry point needs a second explicit button.
-- **Hover-only actions** (session row menus, message actions) are not handled
-  yet; that needs the concrete selectors from a real-device screenshot.
+- **Install prompt still depends on Chrome.** The manifest now carries 192 and
+  512 PNGs plus a service worker, which is the documented installability set.
+  If *Install app* still does not appear, check `chrome://webapks` or remote
+  DevTools → Application → Manifest for the exact rejection reason.
+- **Gallery button placement is heuristic.** It anchors on the hidden
+  `<input type="file">` in the composer toolbar. If a future harness release
+  moves that input, the button stops appearing (no other behaviour breaks).
+- **Hover-reveal coverage is generic.** `[class*="_actions"]` covers the current
+  class suffix; a renamed suffix needs a new selector.
+- **Sidebar popovers on narrow screens** (a workspace menu clipped by the open
+  drawer) are not fixed yet; that needs the concrete DOM from a device.
 
 ## Development
 
 ```sh
-# install against the profile, restart dsh web, then open the phone view
+npm run build:icons   # regenerate assets/icon-{192,512}.png from assets/icon.svg
 dsh plugin --profile web add link:$(pwd) -w
 ```
 
