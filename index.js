@@ -239,10 +239,36 @@ const BOOT_SCRIPT = `!function () {
       } catch (e) {}
     }, true)
 
-    /* The harness composer keeps one persistent, accept-less <input type=file>.
-     * The default "+" menu keeps the document picker; the gallery button sets
-     * accept=image/* only for its own pick and restores the attribute right
-     * after, so a later document pick never inherits the image filter. */
+    /* The harness composer keeps one persistent <input type=file>. On Android
+     * the native picker opens the photo picker even with accept="*/*", so the
+     * document pick goes through the File System Access API instead; the gallery
+     * button opts back into the native picker. */
+    var allowNativePicker = false
+    if (typeof window.showOpenFilePicker === 'function') {
+      var protoClick = HTMLInputElement.prototype.click
+      HTMLInputElement.prototype.click = function () {
+        if (this.type === 'file' && !allowNativePicker) {
+          var input = this
+          try {
+            window.showOpenFilePicker({ multiple: true })
+              .then(function (handles) {
+                return Promise.all(handles.map(function (handle) { return handle.getFile() }))
+              })
+              .then(function (files) {
+                var transfer = new DataTransfer()
+                for (var i = 0; i < files.length; i++) transfer.items.add(files[i])
+                input.files = transfer.files
+                input.dispatchEvent(new Event('change', { bubbles: true }))
+              })
+              .catch(function () {})
+          } catch (e) {
+            return protoClick.call(this)
+          }
+          return
+        }
+        return protoClick.call(this)
+      }
+    }
 
     /* A gallery button beside the composer "+" button. The toolbar already
      * holds the hidden file input, so it gives us both the anchor and the
@@ -270,11 +296,13 @@ const BOOT_SCRIPT = `!function () {
         if (!current) return
         var previousAccept = current.getAttribute('accept')
         var previousMultiple = current.multiple
+        allowNativePicker = true
         current.accept = 'image/*'
         current.multiple = true
         current.click()
         setTimeout(function () {
           try {
+            allowNativePicker = false
             current.setAttribute('accept', previousAccept === null ? '*/*' : previousAccept)
             current.multiple = previousMultiple
           } catch (e) {}
