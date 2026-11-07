@@ -216,6 +216,26 @@ const BOOT_SCRIPT = `!function () {
       } catch (e) {}
     }, true)
 
+    /* On a phone the "+" button opens the command menu, and its click handler
+       calls focusDraftEditor() before toggling the menu, so the keyboard is
+       unavoidable from mousedown alone. Turn "+" into the plain file picker;
+       the gallery button handles images, and typing "/" in the editor still
+       opens the command menu when it is actually wanted. */
+    document.addEventListener('click', function (event) {
+      try {
+        var target = event.target
+        if (!(target instanceof Element)) return
+        var button = target.closest('button[class*="_add"]')
+        if (!button || !button.closest('[class*="_tools"]')) return
+        event.preventDefault()
+        event.stopPropagation()
+        var input = button.parentElement && button.parentElement.querySelector('input[type=file]')
+        if (!input) return
+        window.__dmePickMode = 'file'
+        input.click()
+      } catch (e) {}
+    }, true)
+
     /* The harness composer keeps one persistent, accept-less <input type=file>.
      * The default "+" menu keeps the document picker; our gallery button sets
      * __dmePickMode so the very next click applies accept=image/* instead. */
