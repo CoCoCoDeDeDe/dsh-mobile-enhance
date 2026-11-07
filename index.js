@@ -91,6 +91,10 @@ const MOBILE_CSS = `:root { --dme-kb: 0px; }
    appear. Keep them visible wherever the harness used opacity to hide them. */
 @media (hover: none) and (pointer: coarse) {
   [class*="_actions"] { opacity: 1 !important; }
+  /* The workspace row's .../+ actions are display:none until hover; keep them
+     visible on touch. Session rows stay hover-revealed so the list is not
+     crowded. */
+  [class*="_projectRow"] [class*="_rowActions"] { display: flex !important; }
 }
 
 /* A workspace menu anchored near the drawer's right edge can render under the
