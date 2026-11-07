@@ -5,13 +5,14 @@
  * new UI of its own; it extends the served index and the browser runtime so the
  * existing Web GUI behaves better on a phone:
  *
- * - PWA: serves a pass-through service worker plus a manifest that points at the
- *   bundled SVG icon, so Chrome offers "Install app" instead of only a shortcut.
- * - Keyboard: rewrites the viewport meta with `interactive-widget=resizes-content`
- *   and exposes the on-screen keyboard inset as `--dme-kb` for CSS.
- * - Gallery: on coarse-pointer devices, patches `HTMLInputElement.prototype.click`
- *   so the composer's bare file input opens the system photo picker with
- *   multi-select instead of the document picker.
+ * - PWA: serves a pass-through service worker plus a manifest with 192/512 PNG
+ *   icons, so Chrome can offer "Install app" instead of only a shortcut.
+ * - Keyboard: rewrites the viewport meta with `interactive-widget=resizes-content`,
+ *   keeps the shell above the keyboard, and exposes the inset as `--dme-kb`.
+ * - Gallery: on coarse-pointer devices, injects a gallery button beside the
+ *   composer "+" button. It temporarily sets accept=image/* for its own pick and
+ *   restores the attribute right after, so the document picker keeps every file
+ *   type.
  *
  * Everything is served through the harness webServer, so it also works behind
  * dsh-pocket (the proxy rewrites Host/Origin but forwards these paths unchanged).
@@ -239,21 +240,9 @@ const BOOT_SCRIPT = `!function () {
     }, true)
 
     /* The harness composer keeps one persistent, accept-less <input type=file>.
-     * The default "+" menu keeps the document picker; our gallery button sets
-     * __dmePickMode so the very next click applies accept=image/* instead. */
-    var proto = HTMLInputElement.prototype
-    var originalClick = proto.click
-    proto.click = function () {
-      try {
-        if (this.type === 'file') {
-          var mode = window.__dmePickMode
-          window.__dmePickMode = ''
-          this.accept = mode === 'image' ? 'image/*' : ''
-          if (mode === 'image') this.multiple = true
-        }
-      } catch (e) {}
-      return originalClick.call(this)
-    }
+     * The default "+" menu keeps the document picker; the gallery button sets
+     * accept=image/* only for its own pick and restores the attribute right
+     * after, so a later document pick never inherits the image filter. */
 
     /* A gallery button beside the composer "+" button. The toolbar already
      * holds the hidden file input, so it gives us both the anchor and the
@@ -276,8 +265,18 @@ const BOOT_SCRIPT = `!function () {
         event.stopPropagation()
         var current = parent.querySelector('input[type=file]')
         if (!current) return
-        window.__dmePickMode = 'image'
+        var previousAccept = current.getAttribute('accept')
+        var previousMultiple = current.multiple
+        current.accept = 'image/*'
+        current.multiple = true
         current.click()
+        setTimeout(function () {
+          try {
+            if (previousAccept === null) current.removeAttribute('accept')
+            else current.setAttribute('accept', previousAccept)
+            current.multiple = previousMultiple
+          } catch (e) {}
+        }, 0)
       })
       parent.insertBefore(button, input)
     }
