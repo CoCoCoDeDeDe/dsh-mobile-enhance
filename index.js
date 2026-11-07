@@ -34,22 +34,16 @@ const ICON_PATH = `${PREFIX}/icon.svg`
  * that happens, add PNGs under assets/ and extend this icon list.
  */
 const MANIFEST = {
+  id: '/',
   name: 'DeepSeek Harness',
   short_name: 'DSH',
   description: 'DeepSeek Harness web UI with mobile enhancements',
   start_url: '/',
   scope: '/',
   display: 'standalone',
-  display_override: ['fullscreen', 'standalone'],
   background_color: '#0b0b0f',
   theme_color: '#0b0b0f',
   icons: [
-    {
-      src: ICON_PATH,
-      sizes: 'any',
-      type: 'image/svg+xml',
-      purpose: 'any',
-    },
     {
       src: `${PREFIX}/icon-192.png`,
       sizes: '192x192',
@@ -139,6 +133,7 @@ const STATUS_HTML = `<!doctype html>
       line('SW registration: ' + (reg ? (reg.active ? 'active' : (reg.installing ? 'installing' : 'waiting')) : 'none'));
       line('SW controller: ' + (navigator.serviceWorker.controller ? 'yes' : 'no'));
     }
+    try { line('installable (beforeinstallprompt seen): ' + (localStorage.getItem('dme-installable') || 'no')); } catch (e) {}
     for (var u of ['/dme/manifest.webmanifest', '/dme/icon-192.png', '/dme/icon-512.png', '/dme-sw.js']) {
       try {
         var r = await fetch(u, { cache: 'no-store' });
@@ -181,6 +176,12 @@ const BOOT_SCRIPT = `!function () {
         navigator.serviceWorker.register('${SW_PATH}', { scope: '/' }).catch(function () {})
       }, { once: true })
     }
+
+    /* Record whether Chrome actually considers this page installable, so the
+       status page can report it without DevTools. */
+    window.addEventListener('beforeinstallprompt', function () {
+      try { localStorage.setItem('dme-installable', '1') } catch (e) {}
+    })
 
     var vv = window.visualViewport
     if (vv && window.matchMedia && window.matchMedia('(pointer: coarse)').matches) {
