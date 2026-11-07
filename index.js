@@ -186,8 +186,12 @@ const BOOT_SCRIPT = `!function () {
     new MutationObserver(ensureViewport).observe(document.documentElement, {
       attributes: true,
       attributeFilter: ['content'],
+      childList: true,
       subtree: true,
     })
+    document.addEventListener('DOMContentLoaded', ensureViewport, { once: true })
+    window.addEventListener('load', ensureViewport, { once: true })
+    setInterval(ensureViewport, 1000)
 
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', function () {
