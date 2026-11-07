@@ -243,10 +243,22 @@ const BOOT_SCRIPT = `!function () {
       } catch (e) {}
     }, true)
 
+    /* Page load: the harness auto-focuses the editor, which pops the keyboard
+       before the user asks for it. Blur only *programmatic* focus in the first
+       two seconds; a real tap (isTrusted) is never blocked. */
+    var initialFocusGuard = true
+    setTimeout(function () { initialFocusGuard = false }, 2000)
+    document.addEventListener('focusin', function (event) {
+      if (!initialFocusGuard || event.isTrusted) return
+      var target = event.target
+      if (target && target.isContentEditable) {
+        try { target.blur() } catch (e) {}
+      }
+    }, true)
+
     /* Keep the "+" command menu, but stop its click handler from focusing the
-       editor — that focus is what pops the keyboard on a phone. Only the
-       synchronous focus performed by this click is skipped; menu state and the
-       "/" trigger stay untouched. */
+       editor — that focus is what pops the keyboard on a phone. If the keyboard
+       is already open, drop it shortly after the menu opens as well. */
     var blockEditorFocus = false
     var protoFocus = HTMLElement.prototype.focus
     HTMLElement.prototype.focus = function () {
@@ -260,7 +272,13 @@ const BOOT_SCRIPT = `!function () {
         var button = target.closest('button[class*="_add"]')
         if (!button || !button.closest('[class*="_tools"]')) return
         blockEditorFocus = true
-        setTimeout(function () { blockEditorFocus = false }, 0)
+        setTimeout(function () {
+          blockEditorFocus = false
+          var active = document.activeElement
+          if (active && active.isContentEditable && document.documentElement.classList.contains('dme-kb-open')) {
+            try { active.blur() } catch (e) {}
+          }
+        }, 120)
       } catch (e) {}
     }, true)
 
