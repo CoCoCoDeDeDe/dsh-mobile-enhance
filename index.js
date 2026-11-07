@@ -240,31 +240,20 @@ const BOOT_SCRIPT = `!function () {
 
     if (!window.matchMedia || !window.matchMedia('(pointer: coarse)').matches) return
 
-    /* The composer toolbar's mousedown handler re-focuses the editor, which
-       pops the keyboard whenever the toolbar is expanded on a phone. Stop that
-       press before React sees it; the button's own click still fires. The "+"
-       button is left alone: it toggles the command menu, and swallowing its
-       mousedown also swallows the outside-press that closes the menu. */
-    document.addEventListener('mousedown', function (event) {
-      try {
-        var target = event.target
-        if (!(target instanceof Element)) return
-        if (!target.closest('button')) return
-        if (!target.closest('[class*="_tools"], [class*="_trailing"]')) return
-        if (target.closest('button[class*="_add"]')) return
-        event.stopPropagation()
-      } catch (e) {}
-    }, true)
-
     /* Page load: the harness auto-focuses the editor, which pops the keyboard
        before the user asks for it. Blur programmatic focus until the first real
        touch. Focus events are always trusted (even for a scripted .focus()), so
        gate on the user's own pointer/key interaction instead of isTrusted. */
     var lastInteractionAt = 0
     var blockEditorFocusUntil = 0
-    var markInteraction = function () {
+    var markInteraction = function (event) {
       lastInteractionAt = Date.now()
-      blockEditorFocusUntil = 0
+      var target = event.target
+      /* Tapping the editor itself should always focus it; any other tap must
+         keep the "+" focus block alive. */
+      if (target instanceof Element && (target.isContentEditable || target.closest('[contenteditable]'))) {
+        blockEditorFocusUntil = 0
+      }
     }
     document.addEventListener('pointerdown', markInteraction, true)
     document.addEventListener('touchstart', markInteraction, true)
@@ -273,8 +262,8 @@ const BOOT_SCRIPT = `!function () {
     document.addEventListener('focusin', function (event) {
       var target = event.target
       if (!target || !target.isContentEditable) return
-      /* The "+" click handler focuses the editor after opening the menu; drop
-         that one however it arrives. */
+      /* The "+" press focuses the editor through mousedown and click; drop
+         that focus however it arrives. */
       if (Date.now() < blockEditorFocusUntil) {
         try { target.blur() } catch (e) {}
         return
@@ -284,13 +273,48 @@ const BOOT_SCRIPT = `!function () {
       try { target.blur() } catch (e) {}
     }, true)
 
+    /* The composer toolbar's mousedown handler re-focuses the editor, which
+       pops the keyboard whenever the toolbar is expanded on a phone. Stop that
+       press before React sees it; the button's own click still fires. The "+"
+       is special: its own mousedown handler focuses the editor, so arm the
+       focus block first and then let the press through. */
+    document.addEventListener('mousedown', function (event) {
+      try {
+        var target = event.target
+        if (!(target instanceof Element)) return
+        if (!target.closest('button')) return
+        if (!target.closest('[class*="_tools"], [class*="_trailing"]')) return
+        if (target.closest('button[class*="_add"]')) {
+          blockEditorFocusUntil = Date.now() + 900
+          return
+        }
+        event.stopPropagation()
+      } catch (e) {}
+    }, true)
+
     /* Keep the "+" command menu, but stop its click handler from focusing the
        editor — that focus is what pops the keyboard on a phone. If the keyboard
-       is already open, drop it shortly after the menu opens as well. */
+       is already open, drop it shortly after the menu opens as well.
+       Toggling is handled here too: the harness closes the menu by dismissing
+       the popup shell and then toggling the trigger, so when the menu is
+       already open that toggle re-opens it and a second tap can never close
+       it. Detect the open menu and dismiss it ourselves instead. */
     var protoFocus = HTMLElement.prototype.focus
     HTMLElement.prototype.focus = function () {
       if (this.isContentEditable && Date.now() < blockEditorFocusUntil) return
       return protoFocus.apply(this, arguments)
+    }
+    var dismissCommandMenu = function () {
+      var outside = document.body
+      if (typeof PointerEvent === 'function') {
+        outside.dispatchEvent(new PointerEvent('pointerdown', {
+          bubbles: true,
+          cancelable: true,
+          composed: true,
+        }))
+      } else {
+        outside.dispatchEvent(new Event('pointerdown', { bubbles: true, cancelable: true }))
+      }
     }
     document.addEventListener('click', function (event) {
       try {
@@ -298,6 +322,12 @@ const BOOT_SCRIPT = `!function () {
         if (!(target instanceof Element)) return
         var button = target.closest('button[class*="_add"]')
         if (!button || !button.closest('[class*="_tools"]')) return
+        if (document.querySelector('[data-trigger-menu]') !== null) {
+          event.stopPropagation()
+          event.preventDefault()
+          dismissCommandMenu()
+          return
+        }
         /* The toolbar handler focuses the editor after the menu opens; keep
            blocking that focus for a beat, and make sure any focus that slipped
            through while the keyboard is open gets dropped as well. */
