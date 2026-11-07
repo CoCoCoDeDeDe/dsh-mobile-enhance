@@ -251,6 +251,9 @@ const BOOT_SCRIPT = `!function () {
     var mountGallery = function (input) {
       var parent = input && input.parentElement
       if (!parent || parent.querySelector('[' + GALLERY_ATTR + ']')) return
+      /* An empty accept makes some Android builds fall back to the photo
+         picker; keep an explicit "all files" value on the shared input. */
+      if (!input.hasAttribute('accept')) input.setAttribute('accept', '*/*')
       var button = document.createElement('button')
       button.type = 'button'
       button.setAttribute(GALLERY_ATTR, '')
@@ -272,14 +275,27 @@ const BOOT_SCRIPT = `!function () {
         current.click()
         setTimeout(function () {
           try {
-            if (previousAccept === null) current.removeAttribute('accept')
-            else current.setAttribute('accept', previousAccept)
+            current.setAttribute('accept', previousAccept === null ? '*/*' : previousAccept)
             current.multiple = previousMultiple
           } catch (e) {}
         }, 0)
       })
       parent.insertBefore(button, input)
     }
+
+    /* Clear any stale image accept when the command menu's File item is used. */
+    document.addEventListener('click', function (event) {
+      try {
+        var target = event.target
+        if (!(target instanceof Element)) return
+        var item = target.closest('[role="menuitem"]')
+        if (!item) return
+        var label = (item.textContent || '').trim()
+        if (label.indexOf('文件') < 0 && !/file/i.test(label)) return
+        var inputs = document.querySelectorAll('input[type=file]')
+        for (var i = 0; i < inputs.length; i++) inputs[i].setAttribute('accept', '*/*')
+      } catch (e) {}
+    }, true)
 
     var scanTimer = 0
     var scan = function () {
