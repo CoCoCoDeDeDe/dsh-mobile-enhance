@@ -57,16 +57,34 @@ const MANIFEST = {
       type: 'image/png',
       purpose: 'any',
     },
+    {
+      src: `${PREFIX}/icon-512.png`,
+      sizes: '512x512',
+      type: 'image/png',
+      purpose: 'maskable',
+    },
+    {
+      src: `${PREFIX}/icon.svg`,
+      sizes: 'any',
+      type: 'image/svg+xml',
+      purpose: 'any',
+    },
   ],
 }
 
-const ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="112" fill="#0b0b0f"/>
-  <rect x="152" y="88" width="208" height="336" rx="32" fill="none" stroke="#4d6bfe" stroke-width="20"/>
-  <path d="M196 196h120M196 250h120M196 304h72" stroke="#4d6bfe" stroke-width="18" stroke-linecap="round"/>
-  <circle cx="256" cy="372" r="13" fill="#4d6bfe"/>
-</svg>
-`
+/**
+ * The app icon is the DeepSeek whale mark from the harness web frontend
+ * (`favicon.svg`), composited on the brand blue so it reads as a launcher icon
+ * on both light and dark wallpapers. `assets/icon.svg` is the source of truth;
+ * the PNGs are committed build artifacts (`npm run build:icons`).
+ */
+function readIconSvg() {
+  try {
+    return readFileSync(new URL('./assets/icon.svg', import.meta.url), 'utf8')
+  } catch {
+    return ''
+  }
+}
 
 /**
  * A service worker with a fetch handler is what makes the page installable.
@@ -169,6 +187,8 @@ const ICON_PNG = {
   192: readIconPng(192),
   512: readIconPng(512),
 }
+
+const ICON_SVG_FILE = readIconSvg()
 
 /**
  * Runs in the page before the app boots. Kept dependency-free and wrapped in
@@ -519,7 +539,7 @@ export function apply(ctx) {
             send(res, 405, 'text/plain; charset=utf-8', 'method not allowed')
             return
           }
-          send(res, 200, 'image/svg+xml; charset=utf-8', ICON_SVG, {
+          send(res, 200, 'image/svg+xml; charset=utf-8', ICON_SVG_FILE, {
             'cache-control': 'public, max-age=86400',
           })
         },
