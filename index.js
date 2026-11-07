@@ -39,7 +39,7 @@ const MANIFEST = {
   description: 'DeepSeek Harness web UI with mobile enhancements',
   start_url: '/',
   scope: '/',
-  display: 'fullscreen',
+  display: 'standalone',
   display_override: ['fullscreen', 'standalone'],
   background_color: '#0b0b0f',
   theme_color: '#0b0b0f',
@@ -128,6 +128,11 @@ const STATUS_HTML = `<!doctype html>
     line('secureContext: ' + window.isSecureContext);
     var link = document.querySelector('link[rel=manifest]');
     line('manifest link: ' + (link ? link.href : '(none)'));
+    try {
+      var indexHtml = await fetch('/', { cache: 'no-store' }).then(function (r) { return r.text() });
+      var tag = indexHtml.match(/<link[^>]+rel="manifest"[^>]*>/i);
+      line('index manifest tag: ' + (tag ? tag[0] : '(none)'));
+    } catch (e) { line('index fetch: ' + e.message); }
     line('SW supported: ' + ('serviceWorker' in navigator));
     if ('serviceWorker' in navigator) {
       var reg = await navigator.serviceWorker.getRegistration();
