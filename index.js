@@ -217,23 +217,24 @@ const BOOT_SCRIPT = `!function () {
       } catch (e) {}
     }, true)
 
-    /* On a phone the "+" button opens the command menu, and its click handler
-       calls focusDraftEditor() before toggling the menu, so the keyboard is
-       unavoidable from mousedown alone. Turn "+" into the plain file picker;
-       the gallery button handles images, and typing "/" in the editor still
-       opens the command menu when it is actually wanted. */
+    /* Keep the "+" command menu, but stop its click handler from focusing the
+       editor — that focus is what pops the keyboard on a phone. Only the
+       synchronous focus performed by this click is skipped; menu state and the
+       "/" trigger stay untouched. */
+    var blockEditorFocus = false
+    var protoFocus = HTMLElement.prototype.focus
+    HTMLElement.prototype.focus = function () {
+      if (blockEditorFocus && this.isContentEditable) return
+      return protoFocus.apply(this, arguments)
+    }
     document.addEventListener('click', function (event) {
       try {
         var target = event.target
         if (!(target instanceof Element)) return
         var button = target.closest('button[class*="_add"]')
         if (!button || !button.closest('[class*="_tools"]')) return
-        event.preventDefault()
-        event.stopPropagation()
-        var input = button.parentElement && button.parentElement.querySelector('input[type=file]')
-        if (!input) return
-        window.__dmePickMode = 'file'
-        input.click()
+        blockEditorFocus = true
+        setTimeout(function () { blockEditorFocus = false }, 0)
       } catch (e) {}
     }, true)
 
