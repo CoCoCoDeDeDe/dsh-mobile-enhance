@@ -212,6 +212,7 @@ const BOOT_SCRIPT = `!function () {
     var vv = window.visualViewport
     if (vv && window.matchMedia && window.matchMedia('(pointer: coarse)').matches) {
       var root = document.documentElement
+      var keyboardTimer = null
       var applyKeyboardInset = function () {
         var kb = Math.max(0, Math.round(window.innerHeight - vv.height))
         root.style.setProperty('--dme-kb', kb + 'px')
@@ -222,6 +223,15 @@ const BOOT_SCRIPT = `!function () {
            the keyboard is open, and clear the override when it closes. */
         var app = document.getElementById('root')
         if (app) app.style.height = kb > 80 ? vv.height + 'px' : ''
+        /* Android does not always emit a final visualViewport resize when the
+           keyboard finishes animating, and the first focus can miss it
+           entirely. Keep re-measuring while the keyboard is up. */
+        if (kb > 80 && !keyboardTimer) {
+          keyboardTimer = setInterval(applyKeyboardInset, 150)
+        } else if (kb <= 80 && keyboardTimer) {
+          clearInterval(keyboardTimer)
+          keyboardTimer = null
+        }
       }
       vv.addEventListener('resize', applyKeyboardInset, { passive: true })
       vv.addEventListener('scroll', applyKeyboardInset, { passive: true })
@@ -245,27 +255,32 @@ const BOOT_SCRIPT = `!function () {
 
     /* Page load: the harness auto-focuses the editor, which pops the keyboard
        before the user asks for it. Blur programmatic focus until the first real
-       touch, but never block the user's own tap (isTrusted). */
-    var userInteracted = false
-    var markInteraction = function () { userInteracted = true }
+       touch. Focus events are always trusted (even for a scripted .focus()), so
+       gate on the user's own pointer/key interaction instead of isTrusted. */
+    var lastInteractionAt = 0
+    var blockEditorFocusUntil = 0
+    var markInteraction = function () {
+      lastInteractionAt = Date.now()
+      blockEditorFocusUntil = 0
+    }
     document.addEventListener('pointerdown', markInteraction, true)
     document.addEventListener('touchstart', markInteraction, true)
+    document.addEventListener('mousedown', markInteraction, true)
     document.addEventListener('keydown', markInteraction, true)
     document.addEventListener('focusin', function (event) {
-      if (userInteracted || event.isTrusted) return
       var target = event.target
-      if (target && target.isContentEditable) {
-        try { target.blur() } catch (e) {}
-      }
+      if (!target || !target.isContentEditable) return
+      /* A tap on the composer focuses it right after pointerdown; allow it. */
+      if (Date.now() - lastInteractionAt < 1000) return
+      try { target.blur() } catch (e) {}
     }, true)
 
     /* Keep the "+" command menu, but stop its click handler from focusing the
        editor — that focus is what pops the keyboard on a phone. If the keyboard
        is already open, drop it shortly after the menu opens as well. */
-    var blockEditorFocus = false
     var protoFocus = HTMLElement.prototype.focus
     HTMLElement.prototype.focus = function () {
-      if (blockEditorFocus && this.isContentEditable) return
+      if (this.isContentEditable && Date.now() < blockEditorFocusUntil) return
       return protoFocus.apply(this, arguments)
     }
     document.addEventListener('click', function (event) {
@@ -274,22 +289,28 @@ const BOOT_SCRIPT = `!function () {
         if (!(target instanceof Element)) return
         var button = target.closest('button[class*="_add"]')
         if (!button || !button.closest('[class*="_tools"]')) return
-        blockEditorFocus = true
-        setTimeout(function () {
-          blockEditorFocus = false
+        /* The toolbar handler focuses the editor after the menu opens; keep
+           blocking that focus for a beat, and make sure any focus that slipped
+           through while the keyboard is open gets dropped as well. */
+        blockEditorFocusUntil = Date.now() + 900
+        var timer = setInterval(function () {
           var active = document.activeElement
-          var keyboardOpen = vv && window.innerHeight - vv.height > 100
+          var keyboardOpen = vv && window.innerHeight - vv.height > 80
           if (active && active.isContentEditable && keyboardOpen) {
             try { active.blur() } catch (e) {}
           }
-        }, 120)
+          if (Date.now() >= blockEditorFocusUntil) {
+            clearInterval(timer)
+            blockEditorFocusUntil = 0
+          }
+        }, 100)
       } catch (e) {}
     }, true)
 
     /* The harness composer keeps one persistent <input type=file>. On Android
-     * the native picker opens the photo picker even with accept="*/*", so the
-     * document pick goes through the File System Access API instead; the gallery
-     * button opts back into the native picker. */
+     * the native picker opens the photo picker even with a wildcard accept, so
+     * the document pick goes through the File System Access API instead; the
+     * gallery button opts back into the native picker. */
     var allowNativePicker = false
     if (typeof window.showOpenFilePicker === 'function') {
       var protoClick = HTMLInputElement.prototype.click
