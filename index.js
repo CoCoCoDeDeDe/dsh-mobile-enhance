@@ -172,6 +172,23 @@ const ICON_PNG = {
  */
 const BOOT_SCRIPT = `!function () {
   try {
+    /* dsh-pocket's mobile layer rewrites the viewport meta to
+       "viewport-fit=cover" and drops interactive-widget, which re-enables
+       keyboard overlap. Merge our flag back whenever the meta changes. */
+    var ensureViewport = function () {
+      var meta = document.querySelector('meta[name=viewport]')
+      if (!meta) return
+      var content = meta.getAttribute('content') || ''
+      if (content.indexOf('interactive-widget') >= 0) return
+      meta.setAttribute('content', content + ', interactive-widget=resizes-content')
+    }
+    ensureViewport()
+    new MutationObserver(ensureViewport).observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['content'],
+      subtree: true,
+    })
+
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', function () {
         navigator.serviceWorker.register('${SW_PATH}', { scope: '/' }).catch(function () {})
