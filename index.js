@@ -213,7 +213,7 @@ const BOOT_SCRIPT = `!function () {
     if (vv && window.matchMedia && window.matchMedia('(pointer: coarse)').matches) {
       var root = document.documentElement
       var applyKeyboardInset = function () {
-        var kb = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop))
+        var kb = Math.max(0, Math.round(window.innerHeight - vv.height))
         root.style.setProperty('--dme-kb', kb + 'px')
         root.classList.toggle('dme-kb-open', kb > 80)
         /* Some harness builds keep the shell at a fixed viewport height even
@@ -244,12 +244,15 @@ const BOOT_SCRIPT = `!function () {
     }, true)
 
     /* Page load: the harness auto-focuses the editor, which pops the keyboard
-       before the user asks for it. Blur only *programmatic* focus in the first
-       two seconds; a real tap (isTrusted) is never blocked. */
-    var initialFocusGuard = true
-    setTimeout(function () { initialFocusGuard = false }, 2000)
+       before the user asks for it. Blur programmatic focus until the first real
+       touch, but never block the user's own tap (isTrusted). */
+    var userInteracted = false
+    var markInteraction = function () { userInteracted = true }
+    document.addEventListener('pointerdown', markInteraction, true)
+    document.addEventListener('touchstart', markInteraction, true)
+    document.addEventListener('keydown', markInteraction, true)
     document.addEventListener('focusin', function (event) {
-      if (!initialFocusGuard || event.isTrusted) return
+      if (userInteracted || event.isTrusted) return
       var target = event.target
       if (target && target.isContentEditable) {
         try { target.blur() } catch (e) {}
@@ -275,7 +278,8 @@ const BOOT_SCRIPT = `!function () {
         setTimeout(function () {
           blockEditorFocus = false
           var active = document.activeElement
-          if (active && active.isContentEditable && document.documentElement.classList.contains('dme-kb-open')) {
+          var keyboardOpen = vv && window.innerHeight - vv.height > 100
+          if (active && active.isContentEditable && keyboardOpen) {
             try { active.blur() } catch (e) {}
           }
         }, 120)
