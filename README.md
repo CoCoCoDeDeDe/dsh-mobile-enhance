@@ -65,10 +65,34 @@ worker is pass-through and never caches the shell.
 - **Sidebar popovers on narrow screens** (a workspace menu clipped by the open
   drawer) are not fixed yet; that needs the concrete DOM from a device.
 
+## dsh-pocket compatibility
+
+When the Web UI is reached through `dsh-pocket`, its access-PIN gate answers
+Chrome's internal **manifest and icon requests with 401** — those requests do
+not carry the PIN cookie. Chrome then parses an empty manifest and never offers
+*Install app*. The page itself and the DSH API are unaffected.
+
+`dsh-mobile-enhance` ships an idempotent patch for that gate:
+
+```sh
+npm run patch:dsh-pocket
+```
+
+It exempts `/dme/*` and `/dme-sw.js` from the PIN check and leaves every other
+path authenticated. `dsh-pocket` is replaced on upgrade, so re-run this after:
+
+```sh
+dsh plugin --profile web update dsh-pocket --latest -w
+```
+
+The script prints `already patched` when nothing is needed, and writes a
+`proxy.mjs.dme-bak` backup before changing anything.
+
 ## Development
 
 ```sh
 npm run build:icons   # regenerate assets/icon-{192,512}.png from assets/icon.svg
+npm run patch:dsh-pocket   # re-apply the PWA asset exemption after dsh-pocket updates
 dsh plugin --profile web add link:$(pwd) -w
 ```
 

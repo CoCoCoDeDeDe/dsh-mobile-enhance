@@ -40,7 +40,8 @@
     "LICENSE"
   ],
   "scripts": {
-    "build:icons": "node scripts/build-icons.mjs"
+    "build:icons": "node scripts/build-icons.mjs",
+    "patch:dsh-pocket": "node scripts/patch-dsh-pocket.mjs"
   },
   "devDependencies": {
     "@resvg/resvg-js": "^2.6.2"
