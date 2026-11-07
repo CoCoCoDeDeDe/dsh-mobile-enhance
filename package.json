@@ -1,0 +1,46 @@
+{
+  "name": "dsh-mobile-enhance",
+  "version": "0.1.0",
+  "description": "Mobile experience layer for the DeepSeek Harness Web UI: installable PWA, keyboard-safe viewport, gallery multi-select uploads.",
+  "type": "module",
+  "license": "MIT",
+  "author": "CoCoCoDeDeDe",
+  "homepage": "https://github.com/CoCoCoDeDeDe/dsh-mobile-enhance#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/CoCoCoDeDeDe/dsh-mobile-enhance.git"
+  },
+  "bugs": {
+    "url": "https://github.com/CoCoCoDeDeDe/dsh-mobile-enhance/issues"
+  },
+  "keywords": [
+    "deepseek-harness",
+    "dsh",
+    "dsh-plugin",
+    "mobile",
+    "pwa",
+    "service-worker",
+    "keyboard",
+    "gallery"
+  ],
+  "engines": {
+    "dsh": ">=0.2.1-rc.2 <0.4.0-0",
+    "node": ">=20"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./icon": "./assets/icon.svg"
+  },
+  "files": [
+    "index.js",
+    "cordis.patch.yml",
+    "assets/*",
+    "README.md",
+    "LICENSE"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

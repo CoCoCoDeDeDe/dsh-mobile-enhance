@@ -1,0 +1,5 @@
+# Mobile experience layer for the DSH Web UI.
+# Host half only: extends the served index and the browser runtime.
+- insert:
+    - id: dsh-mobile-enhance
+      name: dsh-mobile-enhance
