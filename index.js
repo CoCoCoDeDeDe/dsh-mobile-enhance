@@ -97,6 +97,55 @@ const MOBILE_CSS = `:root { --dme-kb: 0px; }
 @media (hover: none) and (pointer: coarse) {
   [class*="_actions"] { opacity: 1 !important; }
 }
+
+/* A workspace menu anchored near the drawer's right edge can render under the
+   open drawer on a narrow screen. Keep the harness menu surfaces above it. */
+@media (max-width: 1100px) {
+  [role="menu"], [data-menu-group], [data-menu-material], [data-dockkit-tab-menu] {
+    z-index: 2147483000 !important;
+  }
+}
+`
+
+/**
+ * Small self-diagnostic page for the PWA install path. It reports the manifest
+ * link the page actually sees, the service-worker state, and whether every
+ * install asset is reachable from the browser.
+ */
+const STATUS_HTML = `<!doctype html>
+<html lang="zh">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DSH Mobile Enhance · 状态</title>
+<style>body{font:13px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace;padding:16px;background:#0b0b0f;color:#e6e6e6;white-space:pre-wrap;word-break:break-all}pre{margin:0}</style>
+</head>
+<body><pre id="out">检查中…</pre>
+<script>
+(async function(){
+  var out = []; var el = document.getElementById('out');
+  function line(s){ out.push(s); el.textContent = out.join('\\n') }
+  try {
+    line('URL: ' + location.href);
+    line('secureContext: ' + window.isSecureContext);
+    var link = document.querySelector('link[rel=manifest]');
+    line('manifest link: ' + (link ? link.href : '(none)'));
+    line('SW supported: ' + ('serviceWorker' in navigator));
+    if ('serviceWorker' in navigator) {
+      var reg = await navigator.serviceWorker.getRegistration();
+      line('SW registration: ' + (reg ? (reg.active ? 'active' : (reg.installing ? 'installing' : 'waiting')) : 'none'));
+      line('SW controller: ' + (navigator.serviceWorker.controller ? 'yes' : 'no'));
+    }
+    for (var u of ['/dme/manifest.webmanifest', '/dme/icon-192.png', '/dme/icon-512.png', '/dme-sw.js']) {
+      try {
+        var r = await fetch(u, { cache: 'no-store' });
+        line(u + ' -> ' + r.status + ' ' + (r.headers.get('content-type') || ''));
+      } catch (e) { line(u + ' -> FETCH FAIL ' + e.message); }
+    }
+    var m = await fetch('/dme/manifest.webmanifest', { cache: 'no-store' })
+      .then(function(r){ return r.json() }).catch(function(){ return null });
+    if (m) { line('display: ' + m.display); line('icons: ' + JSON.stringify(m.icons)); }
+  } catch (e) { line('ERROR: ' + e.message); }
+})();
+</script></body></html>
 `
 
 /**
@@ -302,6 +351,20 @@ export function apply(ctx) {
         }),
       )
     }
+
+    cleanup.push(
+      ctx.webServer.register({
+        kind: 'exact',
+        path: `${PREFIX}/status`,
+        handler: (req, res) => {
+          if (req.method !== 'GET') {
+            send(res, 405, 'text/plain; charset=utf-8', 'method not allowed')
+            return
+          }
+          send(res, 200, 'text/html; charset=utf-8', STATUS_HTML)
+        },
+      }),
+    )
 
     cleanup.push(
       ctx.webServer.tapIndex((html) => {
