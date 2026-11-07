@@ -184,6 +184,12 @@ const BOOT_SCRIPT = `!function () {
         var kb = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop))
         root.style.setProperty('--dme-kb', kb + 'px')
         root.classList.toggle('dme-kb-open', kb > 80)
+        /* Some harness builds keep the shell at a fixed viewport height even
+           with interactive-widget=resizes-content, so the composer can stay
+           under the keyboard until a re-render. Shrink the shell itself while
+           the keyboard is open, and clear the override when it closes. */
+        var app = document.getElementById('root')
+        if (app) app.style.height = kb > 80 ? vv.height + 'px' : ''
       }
       vv.addEventListener('resize', applyKeyboardInset, { passive: true })
       vv.addEventListener('scroll', applyKeyboardInset, { passive: true })
@@ -191,6 +197,19 @@ const BOOT_SCRIPT = `!function () {
     }
 
     if (!window.matchMedia || !window.matchMedia('(pointer: coarse)').matches) return
+
+    /* The composer toolbar's mousedown handler re-focuses the editor, which
+       pops the keyboard whenever the toolbar is expanded on a phone. Stop that
+       press before React sees it; the button's own click still fires. */
+    document.addEventListener('mousedown', function (event) {
+      try {
+        var target = event.target
+        if (!(target instanceof Element)) return
+        if (!target.closest('button')) return
+        if (!target.closest('[class*="_tools"], [class*="_trailing"]')) return
+        event.stopPropagation()
+      } catch (e) {}
+    }, true)
 
     /* The harness composer keeps one persistent, accept-less <input type=file>.
      * The default "+" menu keeps the document picker; our gallery button sets
