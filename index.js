@@ -242,13 +242,16 @@ const BOOT_SCRIPT = `!function () {
 
     /* The composer toolbar's mousedown handler re-focuses the editor, which
        pops the keyboard whenever the toolbar is expanded on a phone. Stop that
-       press before React sees it; the button's own click still fires. */
+       press before React sees it; the button's own click still fires. The "+"
+       button is left alone: it toggles the command menu, and swallowing its
+       mousedown also swallows the outside-press that closes the menu. */
     document.addEventListener('mousedown', function (event) {
       try {
         var target = event.target
         if (!(target instanceof Element)) return
         if (!target.closest('button')) return
         if (!target.closest('[class*="_tools"], [class*="_trailing"]')) return
+        if (target.closest('button[class*="_add"]')) return
         event.stopPropagation()
       } catch (e) {}
     }, true)
@@ -270,6 +273,12 @@ const BOOT_SCRIPT = `!function () {
     document.addEventListener('focusin', function (event) {
       var target = event.target
       if (!target || !target.isContentEditable) return
+      /* The "+" click handler focuses the editor after opening the menu; drop
+         that one however it arrives. */
+      if (Date.now() < blockEditorFocusUntil) {
+        try { target.blur() } catch (e) {}
+        return
+      }
       /* A tap on the composer focuses it right after pointerdown; allow it. */
       if (Date.now() - lastInteractionAt < 1000) return
       try { target.blur() } catch (e) {}
